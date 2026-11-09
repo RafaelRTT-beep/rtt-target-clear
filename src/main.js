@@ -13,6 +13,19 @@ import { Weapon } from './weapon.js';
 import { HUD, fmtTime } from './hud.js';
 
 const $ = (id) => document.getElementById(id);
+// bouwversie (wordt bij het bundelen ingevuld); gebruikt om een oude, gecachte versie te verversen
+// eslint-disable-next-line no-undef
+const BUILD = typeof __BUILD__ !== 'undefined' ? __BUILD__ : 'dev';
+const TILT_TEXT = {
+  active: '✓ Kantelen werkt: kantel je telefoon als een stuur om te peeken.',
+  granted: '✓ Sensor toegestaan: kantel je telefoon als een stuur om te peeken.',
+  nodata: 'De sensor geeft geen gegevens. Gebruik de PEEK-knoppen links.',
+  denied: 'Geweigerd. Sluit Safari helemaal af, open de game opnieuw en kies “Sta toe”. Of gebruik de PEEK-knoppen.',
+  error: 'Kon de sensor niet starten. Tik nog een keer op “Kantelen activeren”.',
+  unsupported: 'Deze browser heeft geen bewegingssensor. Gebruik de PEEK-knoppen.',
+  off: 'Kantelen staat uit bij Instellingen. Je kunt de PEEK-knoppen gebruiken.',
+  idle: 'Tik op “Kantelen activeren” en kies “Sta toe”.',
+};
 const store = {
   get(k, d) { try { const v = localStorage.getItem('rtt-tc-' + k); return v === null ? d : JSON.parse(v); } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem('rtt-tc-' + k, JSON.stringify(v)); } catch (_) { /* privé-modus */ } },
@@ -38,6 +51,14 @@ class Game {
   }
 
   async boot() {
+    // staat er een nieuwere versie online? dan meteen verversen (Safari cachet de pagina)
+    if (BUILD !== 'dev') {
+      fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then((r) => r.json()).then((j) => {
+        const u = new URL(location.href);
+        if (j && j.v && j.v !== BUILD && u.searchParams.get('v') !== j.v) { u.searchParams.set('v', j.v); location.replace(u.toString()); }
+      }).catch(() => {});
+    }
+    const verEl = $('ver'); if (verEl) verEl.textContent = 'versie ' + BUILD;
     const bar = $('loadBar');
     const setP = (p) => { bar.style.transform = `scaleX(${p})`; };
     this.engine = new Engine($('c'));
@@ -211,7 +232,7 @@ class Game {
   magnet(origin, dir) {
     const w = this.world.raycast(origin, dir, 150);
     if (this.actors.raycast(origin, dir, w ? w.t : 150)) return dir;
-    let best = null, bestA = 0.022;
+    let best = null, bestA = 0.016;
     const p = new THREE.Vector3();
     for (const a of this.actors.list) {
       if (!a.alive) continue;
@@ -340,6 +361,7 @@ class Game {
     $('briefControls').innerHTML = this.input.touch
       ? ({ cross: 'Tik op het scherm: schieten op de crosshair · Telefoon kantelen: peeken · Links slepen: lopen · Rechts slepen: richten · Vuurknop ingedrukt: automatisch vuren', point: 'Tik op het scherm: schieten waar je tikt · Links slepen: lopen · Rechts slepen: kijken · Vuurknop ingedrukt: automatisch vuren' }[this.settings.tapMode] || 'Links slepen: lopen · Rechts slepen: kijken · Vuurknop ook slepen om te richten · Vizier = richten')
       : 'WASD lopen · Muis kijken · Linkerknop vuren · Rechterknop richten · Q/E leunen · R herladen · C hurken · Esc pauze';
+    this.updateTiltRow();
     const b = this.best[lv.code];
     $('briefBest').textContent = b ? `Beste: ${fmtTime(b.t)}  (${b.g})` : 'Nog geen tijd gezet';
     this.setState('brief');
@@ -434,6 +456,10 @@ class Game {
     tap('btnSettings', () => this.openSettings());
     tap('btnPauseSettings', () => this.openSettings());
     tap('btnSettingsClose', () => this.closeSettings());
+    // moet direct vanuit de tik: dan toont iOS de toestemmingsvraag
+    tap('btnTilt', () => {
+      this.input.enableTilt().then(() => { this.input.recenterTilt(); this.updateTiltRow(); setTimeout(() => this.updateTiltRow(), 1700); });
+    });
     const sens = $('setSens'), qual = $('setQuality'), assist = $('setAssist'), snd = $('setSound'), tapf = $('setTap'), tilt = $('setTilt');
     tilt.value = this.settings.tilt;
     tilt.addEventListener('change', () => { this.settings.tilt = tilt.value; this.input.tiltMode = tilt.value; if (tilt.value !== 'off') { this.input.enableTilt(); this.input.recenterTilt(); } this.saveSettings(); });
@@ -462,6 +488,16 @@ class Game {
   }
 
   saveSettings() { store.set('settings', this.settings); }
+
+  updateTiltRow() {
+    const row = $('tiltRow');
+    if (!row) return;
+    row.style.display = this.input.touch ? '' : 'none';
+    const s = this.input.tiltState();
+    $('tiltStatus').textContent = TILT_TEXT[s] || TILT_TEXT.idle;
+    row.dataset.state = s;
+    $('btnTilt').style.display = (s === 'active' || s === 'granted' || s === 'off') ? 'none' : '';
+  }
   openSettings() { $('settings').classList.add('show'); }
   closeSettings() { $('settings').classList.remove('show'); }
 
@@ -583,7 +619,13 @@ class Game {
           this.setState('play');
           if (this.level.mode === 'targets') this.sound.beep();
           else this.sound.ui(1200);
-          if (this.input.tilt.on && !this.tiltHinted) { this.tiltHinted = true; setTimeout(() => this.hud.toast('KANTEL JE TELEFOON OM TE PEEKEN'), 900); }
+          if (this.input.touch && !this.tiltHinted) {
+            this.tiltHinted = true;
+            setTimeout(() => {
+              const s = this.input.tiltState();
+              this.hud.toast(s === 'active' ? 'KANTEL JE TELEFOON OM TE PEEKEN' : 'PEEKEN: GEBRUIK DE ◀ ▶ KNOPPEN');
+            }, 1600);
+          }
         }
       }
       if (this.finished) {
@@ -602,7 +644,12 @@ class Game {
       this.hud.setTimer(this.time, this.penalty);
       this.hud.setAmmo(this.weapon.mag, this.weapon.magSize, this.weapon.reloading);
       this.hud.setHealth(this.player.health);
-      if (this.input.touch) { this.adsBtn.classList.toggle('active', this.input.adsToggle); this.crouchBtn.classList.toggle('active', this.input.crouch); }
+      if (this.input.touch) {
+        this.adsBtn.classList.toggle('active', this.input.adsToggle); this.crouchBtn.classList.toggle('active', this.input.crouch);
+        const tm = $('tiltMeter');
+        tm.classList.toggle('show', this.input.tiltState() === 'active');
+        tm.firstElementChild.style.transform = `translateX(${(this.player.lean * 30).toFixed(1)}px)`;
+      }
       const spreadPx = this.weapon.currentSpread(this.player) / THREE.MathUtils.degToRad(cam.fov / 2) * (E.height / 2);
       this.hud.setCross(spreadPx, this.weapon.ads);
       this.hud.minimap(dt, this.world, this.player, this.actors, this.clock);

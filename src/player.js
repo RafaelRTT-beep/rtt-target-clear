@@ -73,7 +73,7 @@ export class Player {
     this.recoverDelay = (this.recoverDelay || 0) - dt;
     if (this.recoilP > 0 && this.recoverDelay <= 0) {
       const r = Math.min(this.recoilP, this.recoilP * dt * 7 + dt * 0.02);
-      this.pitch -= r * 0.75;
+      this.pitch -= r; // volledig terug naar waar je richtte
       this.recoilP -= r;
     }
     this.pitch = THREE.MathUtils.clamp(this.pitch, -1.45, 1.45);

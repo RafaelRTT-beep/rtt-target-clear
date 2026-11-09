@@ -275,14 +275,17 @@ export class Weapon {
     const a = this.ads;
     const P = this.rig.position;
     P.lerpVectors(this.hipPos, this.adsPos, a);
-    P.x += bx + this.sway.x * 0.6; P.y += by + this.sway.y * 0.6 + breath + (player.crouch ? -0.01 : 0) * (1 - a);
+    // in ADS staat het wapen muurvast: de red dot valt dan exact samen met waar de kogel heen gaat
+    const steady = 1 - a;
+    P.x += (bx + this.sway.x * 0.6) * steady;
+    P.y += (by + this.sway.y * 0.6 + breath) * steady + (player.crouch ? -0.01 : 0) * steady;
     this.rig.rotation.set(
-      THREE.MathUtils.lerp(this.hipRot.x, this.adsRot.x, a) + rx + this.sway.y * 2,
-      THREE.MathUtils.lerp(this.hipRot.y, this.adsRot.y, a) + ry + this.sway.x * 2,
-      THREE.MathUtils.lerp(this.hipRot.z, this.adsRot.z, a) + rz + this.sway.x * 1.5,
+      THREE.MathUtils.lerp(this.hipRot.x, this.adsRot.x, a) + rx + this.sway.y * 2 * steady,
+      THREE.MathUtils.lerp(this.hipRot.y, this.adsRot.y, a) + ry + this.sway.x * 2 * steady,
+      THREE.MathUtils.lerp(this.hipRot.z, this.adsRot.z, a) + rz + this.sway.x * 1.5 * steady,
     );
     this.gun.position.set(0, 0, this.kickPos);
-    this.gun.rotation.set(this.kickRot, 0, 0);
+    this.gun.rotation.set(this.kickRot * (1 - 0.8 * a), 0, 0);
     // flash
     if (this.flashT > 0) {
       this.flashT -= dt;
@@ -317,8 +320,8 @@ export class Weapon {
     // terugslag
     this.kickVel += 1.6 + Math.random() * 0.3;
     this.kickRotVel += 3.2 + Math.random() * 0.8;
-    const kp = (0.011 + Math.random() * 0.005) * (1 - this.ads * 0.35) * (player.crouch ? 0.8 : 1);
-    player.addRecoil(kp, (Math.random() - 0.45) * 0.006);
+    const kp = (0.0055 + Math.random() * 0.0025) * (1 - this.ads * 0.4) * (player.crouch ? 0.8 : 1);
+    player.addRecoil(kp, (Math.random() - 0.5) * 0.0016);
     // flash
     this.flash.visible = true;
     this.flash.rotation.z = Math.random() * Math.PI;

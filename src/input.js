@@ -19,6 +19,7 @@ export class Input {
     this.looks = new Map();
     this.fires = new Set();
     this.taps = [];
+    this.leanBtns = new Map();
     this.tapFire = opts.tapFire !== false;
     // kantelen om te peeken (bewegingssensor)
     this.tiltMode = opts.tilt || 'on';
@@ -27,7 +28,8 @@ export class Input {
       const g = e.accelerationIncludingGravity;
       if (!g || g.x == null || g.y == null) return;
       // hoek van de zwaartekracht in het schermvlak: verandert als je de telefoon als een stuur kantelt
-      if (Math.hypot(g.x, g.y) < 3) { this.tilt.weak = true; return; }
+      this.tilt.last = performance.now();
+      if (Math.hypot(g.x, g.y) < 1.5) { this.tilt.weak = true; return; }
       this.tilt.weak = false;
       this.tilt.raw = Math.atan2(g.y, g.x);
     };
@@ -52,6 +54,7 @@ export class Input {
       if (b === 'reload') { this._reload = true; this.looks.set(e.pointerId, { x: e.clientX, y: e.clientY, el }); return; }
       if (b === 'crouch') { this.crouch = !this.crouch; this.looks.set(e.pointerId, { x: e.clientX, y: e.clientY, el }); return; }
       if (b === 'pause') { this._pause = true; return; }
+      if (b === 'leanL' || b === 'leanR') { this.leanBtns.set(e.pointerId, b === 'leanL' ? -1 : 1); this.looks.set(e.pointerId, { x: e.clientX, y: e.clientY, el }); return; }
       if (e.clientX < window.innerWidth * 0.42 && !this.joy) {
         this.joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), tap: true };
         this.joyBase.style.transform = `translate(${e.clientX - 60}px, ${e.clientY - 60}px)`;
@@ -81,13 +84,8 @@ export class Input {
       }
       const l = this.looks.get(e.pointerId);
       if (l) {
-        if (l.live === false) {
-          // dode zone: een tik mag het beeld niet laten schudden
-          if (Math.hypot(e.clientX - l.sx, e.clientY - l.sy) < 9) return;
-          l.live = true; l.tap = false;
-          l.x = e.clientX; l.y = e.clientY;
-          return;
-        }
+        // geen dode zone: kleine correcties moeten direct werken
+        if (l.tap && Math.hypot(e.clientX - l.sx, e.clientY - l.sy) > 12) l.tap = false;
         this.lookDX += (e.clientX - l.x);
         this.lookDY += (e.clientY - l.y);
         l.x = e.clientX; l.y = e.clientY;
@@ -109,6 +107,7 @@ export class Input {
       if (l && l.el) l.el.classList.remove('on');
       this.looks.delete(e.pointerId);
       this.fires.delete(e.pointerId);
+      this.leanBtns.delete(e.pointerId);
     };
     L.addEventListener('pointerup', end);
     L.addEventListener('pointercancel', end);
@@ -144,17 +143,40 @@ export class Input {
   }
 
   // moet vanuit een tik/klik worden aangeroepen (iOS vraagt dan om toestemming)
+  // geeft een Promise met de status: granted / denied / error / unsupported / off
   enableTilt() {
-    if (this.tilt.on || this.tiltMode === 'off') return;
+    if (this.tiltMode === 'off') return Promise.resolve('off');
+    if (this.tilt.on) return Promise.resolve('granted');
     const DM = window.DeviceMotionEvent;
-    if (!DM) return;
-    const start = () => { if (this.tilt.on) return; window.addEventListener('devicemotion', this._onMotion); this.tilt.on = true; };
+    if (!DM) { this.tilt.status = 'unsupported'; return Promise.resolve('unsupported'); }
+    const start = () => {
+      if (!this.tilt.on) { window.addEventListener('devicemotion', this._onMotion); this.tilt.on = true; this.tilt.since = performance.now(); }
+      this.tilt.status = 'granted';
+      return 'granted';
+    };
     if (typeof DM.requestPermission === 'function') {
-      DM.requestPermission().then((r) => { if (r === 'granted') start(); }).catch(() => {});
-    } else start();
+      let p;
+      try { p = DM.requestPermission(); } catch (e) { this.tilt.status = 'error'; return Promise.resolve('error'); }
+      return Promise.resolve(p)
+        .then((r) => { if (r === 'granted') return start(); this.tilt.status = 'denied'; return 'denied'; })
+        .catch(() => { this.tilt.status = 'error'; return 'error'; });
+    }
+    return Promise.resolve(start());
+  }
+
+  // actuele toestand voor de UI
+  tiltState() {
+    const t = this.tilt;
+    if (this.tiltMode === 'off') return 'off';
+    if (!t.on) return t.status || 'idle';
+    const now = performance.now();
+    if ((!t.last || now - t.last > 1500) && now - t.since > 1500) return 'nodata';
+    return 'active';
   }
 
   recenterTilt() { this.tilt.neutral = null; }
+
+  btnLean() { let s = 0; for (const v of this.leanBtns.values()) s += v; return Math.max(-1, Math.min(1, s)); }
 
   tiltLean(dt) {
     const t = this.tilt;
@@ -183,7 +205,7 @@ export class Input {
     this.enabled = on;
     if (!on) {
       this.moveX = this.moveY = 0; this.lookDX = this.lookDY = 0;
-      this.fireHeld = false; this.adsHold = false; this.fires.clear(); this.looks.clear(); this.taps.length = 0;
+      this.fireHeld = false; this.adsHold = false; this.fires.clear(); this.looks.clear(); this.taps.length = 0; this.leanBtns.clear();
       this.joy = null; this.joyBase.classList.remove('active');
       this.placeJoyDefault();
       document.querySelectorAll('[data-btn].on').forEach((b) => b.classList.remove('on'));
@@ -216,7 +238,7 @@ export class Input {
       reload: this._reload,
       pause: this._pause,
       taps: this.taps.splice(0),
-      lean: keyLean || (this.touch ? this.tiltLean(dt) : 0),
+      lean: keyLean || this.btnLean() || (this.touch ? this.tiltLean(dt) : 0),
     };
     this.lookDX = 0; this.lookDY = 0;
     this._reload = false; this._pause = false;

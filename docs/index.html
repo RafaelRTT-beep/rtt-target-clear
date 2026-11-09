@@ -202,6 +202,19 @@ body.is-touch .b-main { font-size: 32px; } body.is-touch #banner.big .b-main { f
 .tapfx { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); box-shadow: 0 0 10px rgba(255,80,60,.6); animation: tapfx .4s ease-out forwards; pointer-events: none; }
 .tapfx::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #ff3b30; }
 @keyframes tapfx { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+#tiltRow { display: flex; align-items: center; gap: 12px; margin: 2px 0 10px; font-size: 13px; color: #d9dbdd; max-width: 540px; }
+#tiltRow[data-state="active"], #tiltRow[data-state="granted"] { color: #8ee6a8; }
+#tiltRow[data-state="denied"], #tiltRow[data-state="nodata"], #tiltRow[data-state="error"] { color: #ffb3b6; }
+.btn.small { padding: 8px 12px; font-size: 14px; white-space: nowrap; }
+#ver { margin-left: auto; font-size: 11px; color: rgba(255,255,255,.35); letter-spacing: .08em; }
+#tiltMeter { position: relative; width: 74px; height: 3px; margin: 6px auto 0; background: rgba(255,255,255,.25); opacity: 0; transition: opacity .3s; }
+#tiltMeter.show { opacity: 1; }
+#tiltMeter i { position: absolute; left: 50%; top: -3px; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.6); }
+.tb.peek { width: 54px; height: 54px; top: calc(78px + var(--st)); }
+.tb.peek span { position: absolute; bottom: 6px; font-family: var(--cond); font-weight: 700; font-size: 9px; letter-spacing: .12em; pointer-events: none; }
+.tb.peek svg { margin-top: -8px; }
+.tb.leanL { left: calc(14px + var(--sl)); }
+.tb.leanR { left: calc(76px + var(--sl)); }
 #rotate { position: fixed; inset: 0; z-index: 60; background: #0b0c0e; display: none; place-items: center; text-align: center; padding: 30px; }
 body.portrait #rotate { display: grid; }
 #rotate svg { width: 70px; height: 70px; stroke: #fff; fill: none; stroke-width: 2; animation: rot 2.4s ease-in-out infinite; }
@@ -214,7 +227,15 @@ body.portrait #rotate { display: grid; }
   .lvl { padding: 6px 12px; } .lvl-name { font-size: 18px; } .lvl-num { font-size: 24px; }
   #levelList { gap: 6px; }
   .menu-foot { margin-top: 8px; }
-  #briefText { font-size: 13px; } .brief-name { font-size: 40px; } #briefStats b { font-size: 24px; }
+  .brief-in { top: calc(6px + var(--st)); transform: none; max-height: calc(100vh - 12px - var(--st)); }
+  .brief-code { font-size: 12px; } .brief-name { font-size: 32px; } .brief-sub { font-size: 12.5px; margin-bottom: 4px; }
+  #briefText { font-size: 12px; line-height: 1.35; margin-bottom: 5px; }
+  #briefRules { margin-bottom: 5px; gap: 4px; } #briefRules li { font-size: 10.5px; padding: 3px 6px; }
+  #briefStats { margin: 0 0 3px; gap: 16px; } #briefStats b { font-size: 19px; } #briefStats span { font-size: 9.5px; }
+  #briefControls { font-size: 10.5px; margin-bottom: 4px; }
+  #tiltRow { margin: 0 0 5px; font-size: 11.5px; gap: 8px; } #tiltRow .btn.small { padding: 6px 10px; font-size: 12.5px; }
+  #briefBest { margin-bottom: 6px; font-size: 12.5px; }
+  .brief-in .row .btn { padding: 8px 18px; font-size: 15px; }
   .grade { width: 96px; height: 96px; font-size: 72px; } #resRows div { padding: 3px 0; font-size: 13px; }
   .b-main { font-size: 30px; }
 }
@@ -233,7 +254,7 @@ body.portrait #rotate { display: grid; }
 </div>
 
 <div id="hud">
-  <div id="topbar"><div id="timer">0:00.00</div><div id="objective"></div></div>
+  <div id="topbar"><div id="timer">0:00.00</div><div id="objective"></div><div id="tiltMeter"><i></i></div></div>
   <canvas id="minimap"></canvas>
   <div id="cross"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="dot"></i></div>
   <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
@@ -251,6 +272,8 @@ body.portrait #rotate { display: grid; }
   <button class="tb ads" data-btn="ads" aria-label="Richten"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.5" fill="#fff"/></svg></button>
   <button class="tb reload" data-btn="reload" aria-label="Herladen"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
   <button class="tb crouch" data-btn="crouch" aria-label="Hurken"><svg viewBox="0 0 24 24"><path d="M12 4v8l-4 4M12 12l5 2v6M6 20h4"/><circle cx="12" cy="3" r="1"/></svg></button>
+  <button class="tb peek leanL" data-btn="leanL" aria-label="Peek links"><svg viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></svg><span>PEEK</span></button>
+  <button class="tb peek leanR" data-btn="leanR" aria-label="Peek rechts"><svg viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></svg><span>PEEK</span></button>
   <button class="tb fire" data-btn="fire" aria-label="Vuur"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></button>
 </div>
 
@@ -265,6 +288,7 @@ body.portrait #rotate { display: grid; }
     <div class="menu-foot">
       <button class="btn" id="btnSettings">Instellingen</button>
       <span id="a2hs">Tip: <b>Deel → Zet op beginscherm</b> voor volledig scherm</span>
+      <span id="ver"></span>
     </div>
   </div>
 </div>
@@ -278,6 +302,7 @@ body.portrait #rotate { display: grid; }
     <ul id="briefRules"></ul>
     <div id="briefStats"></div>
     <div id="briefControls"></div>
+    <div id="tiltRow"><button class="btn small" id="btnTilt">Kantelen activeren</button><span id="tiltStatus"></span></div>
     <div id="briefBest"></div>
     <div class="row">
       <button class="btn primary" id="btnBriefStart">Start</button>
@@ -331,6 +356,6 @@ body.portrait #rotate { display: grid; }
 
 <div id="rotate"><div><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><p>Draai je telefoon</p></div></div>
 
-<script type="module" src="game.js?v=mw96ekyl"></script>
+<script type="module" src="game.js?v=mw97qae0"></script>
 </body>
 </html>
