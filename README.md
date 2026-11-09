@@ -11,7 +11,7 @@ Speelt direct in de browser (Safari/Chrome) en kan als app op het beginscherm.
 3. **Entresol**: rook in de hal, schutters op de entresol, trap op en een gijzeling als finale.
 
 ## Besturing
-- **Telefoon:** links slepen om te lopen, rechts slepen om te kijken. De vuurknop kun je ook slepen om te richten. Daarnaast knoppen voor vizier, herladen en hurken.
+- **Telefoon:** tik op het scherm om te schieten. Het schot gaat naar de plek waar je tikt en de camera draait mee. Links slepen om te lopen, rechts slepen om te kijken. De vuurknop ingedrukt houden geeft automatisch vuur. Daarnaast knoppen voor vizier, herladen en hurken. Tik-om-te-schieten staat aan/uit bij Instellingen.
 - **Mac/pc:** WASD lopen, muis kijken, linkerknop vuren, rechterknop richten, R herladen, C hurken, Esc pauze.
 
 ## Techniek

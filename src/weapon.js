@@ -289,20 +289,28 @@ export class Weapon {
     }
   }
 
-  fire(player, game) {
+  // één schot op verzoek (tik); geeft false als het wapen nog niet klaar is
+  trigger(player, game, aimDir) {
+    if (this.reloading || this.fireCD > 0 || !player.alive || !game.canShoot) return false;
+    if (this.mag <= 0) { this.sound.dry(); this.fireCD = 0.3; this.startReload(); return true; }
+    this.fire(player, game, aimDir);
+    return true;
+  }
+
+  fire(player, game, aimDir) {
     this.fireCD = 0.086;
     this.mag--;
     this.shots++;
-    const spread = this.currentSpread(player);
+    const spread = aimDir ? Math.min(this.currentSpread(player), 0.004) : this.currentSpread(player);
     this.bloom = Math.min(0.035, this.bloom + 0.0045 * (1 - this.ads * 0.6));
     // richting met spreiding
     const cam = this.engine.camera;
-    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    const dir = aimDir ? aimDir.clone() : new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
     const r = Math.sqrt(Math.random()) * spread, th = Math.random() * Math.PI * 2;
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
     dir.addScaledVector(right, Math.cos(th) * r).addScaledVector(up, Math.sin(th) * r).normalize();
-    game.fireShot(cam.position.clone(), dir);
+    game.fireShot(cam.position.clone(), dir, !!aimDir);
     // terugslag
     this.kickVel += 1.6 + Math.random() * 0.3;
     this.kickRotVel += 3.2 + Math.random() * 0.8;

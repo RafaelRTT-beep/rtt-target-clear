@@ -199,6 +199,9 @@ body.is-touch .hp-label { bottom: 7px; }
 body.is-touch #minimap { width: 112px; height: 112px; }
 body.is-touch .b-main { font-size: 32px; } body.is-touch #banner.big .b-main { font-size: 42px; }
 
+.tapfx { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); box-shadow: 0 0 10px rgba(255,80,60,.6); animation: tapfx .4s ease-out forwards; pointer-events: none; }
+.tapfx::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #ff3b30; }
+@keyframes tapfx { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
 #rotate { position: fixed; inset: 0; z-index: 60; background: #0b0c0e; display: none; place-items: center; text-align: center; padding: 30px; }
 body.portrait #rotate { display: grid; }
 #rotate svg { width: 70px; height: 70px; stroke: #fff; fill: none; stroke-width: 2; animation: rot 2.4s ease-in-out infinite; }
@@ -316,6 +319,7 @@ body.portrait #rotate { display: grid; }
     <div class="set-row"><span>Gevoeligheid <b id="sensVal">1.00</b></span><input id="setSens" type="range" min="0.3" max="2.5" step="0.05"></div>
     <div class="set-row"><span>Grafische kwaliteit</span>
       <select id="setQuality"><option value="auto">Automatisch</option><option value="high">Hoog</option><option value="medium">Normaal</option><option value="low">Laag</option></select></div>
+    <div class="set-row"><span>Tik om te schieten</span><input id="setTap" type="checkbox"></div>
     <div class="set-row"><span>Richthulp (touch)</span><input id="setAssist" type="checkbox"></div>
     <div class="set-row"><span>Geluid</span><input id="setSound" type="checkbox"></div>
     <div class="row" style="margin-top:14px"><button class="btn primary" id="btnSettingsClose">Klaar</button></div>
@@ -324,6 +328,6 @@ body.portrait #rotate { display: grid; }
 
 <div id="rotate"><div><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><p>Draai je telefoon</p></div></div>
 
-<script type="module" src="game.js?v=mw95etwj"></script>
+<script type="module" src="game.js?v=mw963798"></script>
 </body>
 </html>

@@ -34,6 +34,14 @@ export class HUD {
 
   show(on) { this.el.classList.toggle('show', on); }
 
+  tapFx(x, y) {
+    const d = document.createElement('div');
+    d.className = 'tapfx';
+    d.style.left = x + 'px'; d.style.top = y + 'px';
+    this.el.appendChild(d);
+    setTimeout(() => d.remove(), 450);
+  }
+
   setTimer(s, pen) {
     this.timer.innerHTML = fmtTime(s) + (pen > 0 ? `<span class="pen">+${pen}s</span>` : '');
   }

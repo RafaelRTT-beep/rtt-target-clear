@@ -27,7 +27,7 @@ const DIFF = {
 class Game {
   constructor() {
     this.state = 'loading';
-    this.settings = Object.assign({ sens: 1, quality: 'auto', assist: true, sound: true }, store.get('settings', {}));
+    this.settings = Object.assign({ sens: 1, quality: 'auto', assist: true, sound: true, tapFire: true }, store.get('settings', {}));
     this.best = store.get('best', {});
     this.clock = 0;
     this.lastShotT = 99;
@@ -46,7 +46,7 @@ class Game {
     this.T = await buildTextures((p) => setP(0.05 + p * 0.7));
     this.sound = new Sound();
     this.sound.setEnabled(this.settings.sound);
-    this.input = new Input($('touch'), $('c'), { sens: this.settings.sens });
+    this.input = new Input($('touch'), $('c'), { sens: this.settings.sens, tapFire: this.settings.tapFire });
     this.input.onUnlock = () => { if (this.state === 'play') this.pause(); };
     this.fx = new FX(this.engine, this.T);
     this.fx.onCasing = () => this.sound.casing();
@@ -127,11 +127,22 @@ class Game {
   }
 
   // ---------------- schieten ----------------
-  fireShot(origin, dir) {
+  fireShot(origin, dir, tracer = false) {
     this.lastShotT = 0;
     this.lastShotPos.copy(origin);
     const w = this.world.raycast(origin, dir, 150);
     const a = this.actors.raycast(origin, dir, w ? w.t : 150);
+    if (tracer) {
+      // bij tik-schoten een tracer van de loop naar het doel, zodat je ziet waar het schot heen ging
+      const cam = this.engine.camera;
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
+      const ads = this.weapon.ads;
+      const muzzle = origin.clone().addScaledVector(fwd, 0.75).addScaledVector(right, 0.13 * (1 - ads)).addScaledVector(up, -0.12 + 0.06 * ads);
+      const end = a ? a.point : w ? w.point : origin.clone().addScaledVector(dir, 60);
+      this.fx.tracer(muzzle, end);
+    }
     if (a) {
       a.dir = dir;
       const res = a.actor.onHit(a, this) || {};
@@ -146,6 +157,50 @@ class Game {
       this.fx.impact(w.point, w.normal, w.mat, 0);
       this.sound.impact(w.mat, this.panOf(w.point), this.distOf(w.point));
     }
+  }
+
+  // richting door het punt waar je tikte (+ richthulp als je net naast een verdachte tikt)
+  tapDirection(sx, sy) {
+    const cam = this.engine.camera;
+    cam.updateMatrixWorld();
+    const ndc = new THREE.Vector3((sx / this.engine.width) * 2 - 1, -(sy / this.engine.height) * 2 + 1, 0.5);
+    const dir = ndc.clone().unproject(cam).sub(cam.position).normalize();
+    if (this.settings.assist) {
+      const w = this.world.raycast(cam.position, dir, 150);
+      const direct = this.actors.raycast(cam.position, dir, w ? w.t : 150);
+      if (!direct) {
+        // niets geraakt: zoek een verdachte/schijf vlak bij het tikpunt (nooit door een burger heen)
+        let best = null, bestD = 46;
+        const p = new THREE.Vector3(), sp = new THREE.Vector3();
+        for (const a of this.actors.list) {
+          if (!a.alive) continue;
+          if (a.kind === 'target' && a.turner && a.turnAng > 0.6) continue;
+          const pts = [a.aimPoint(p).clone()];
+          if (a.kind === 'human') pts.push(a.headPos.clone());
+          for (const q of pts) {
+            sp.copy(q).project(cam);
+            if (sp.z > 1) continue;
+            const px = (sp.x + 1) / 2 * this.engine.width, py = (1 - sp.y) / 2 * this.engine.height;
+            const d = Math.hypot(px - sx, py - sy);
+            if (d < bestD) {
+              const to = q.clone().sub(cam.position); const dist = to.length(); to.divideScalar(dist);
+              const ww = this.world.raycast(cam.position, to, dist);
+              if (ww && ww.t < dist - 0.3) continue;
+              const blocker = this.actors.raycast(cam.position, to, dist - 0.05);
+              if (blocker && blocker.actor !== a) continue;
+              bestD = d; best = to;
+            }
+          }
+        }
+        if (best) dir.copy(best);
+      }
+    }
+    // camera draait een stukje mee naar het tikpunt
+    const wantYaw = Math.atan2(-dir.x, -dir.z), wantPitch = Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1));
+    let dy = wantYaw - this.player.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
+    this.player.nudgeYaw = dy * 0.35;
+    this.player.nudgePitch = (wantPitch - this.player.pitch) * 0.35;
+    return dir;
   }
 
   panOf(p) {
@@ -254,7 +309,7 @@ class Game {
       ? `<div><b>${hostiles}</b><span>shoot</span></div><div><b>${this.actors.list.filter((a) => a.kind === 'target' && !a.hostile).length}</b><span>no-shoot</span></div><div><b>${this.rooms.length}</b><span>kamers</span></div>`
       : `<div><b>${hostiles}</b><span>verdachten</span></div><div><b>${civ}</b><span>burgers</span></div><div><b>${this.rooms.length}</b><span>ruimtes</span></div>`;
     $('briefControls').innerHTML = this.input.touch
-      ? 'Links slepen: lopen · Rechts slepen: kijken · Vuurknop ook slepen om te richten · Vizier = richten'
+      ? (this.settings.tapFire ? 'Tik op het scherm: schieten waar je tikt · Links slepen: lopen · Rechts slepen: kijken · Vuurknop ingedrukt houden: automatisch vuren' : 'Links slepen: lopen · Rechts slepen: kijken · Vuurknop ook slepen om te richten · Vizier = richten')
       : 'WASD lopen · Muis kijken · Linkerknop vuren · Rechterknop richten · R herladen · C hurken · Esc pauze';
     const b = this.best[lv.code];
     $('briefBest').textContent = b ? `Beste: ${fmtTime(b.t)}  (${b.g})` : 'Nog geen tijd gezet';
@@ -348,7 +403,9 @@ class Game {
     tap('btnSettings', () => this.openSettings());
     tap('btnPauseSettings', () => this.openSettings());
     tap('btnSettingsClose', () => this.closeSettings());
-    const sens = $('setSens'), qual = $('setQuality'), assist = $('setAssist'), snd = $('setSound');
+    const sens = $('setSens'), qual = $('setQuality'), assist = $('setAssist'), snd = $('setSound'), tapf = $('setTap');
+    tapf.checked = this.settings.tapFire;
+    tapf.addEventListener('change', () => { this.settings.tapFire = tapf.checked; this.input.tapFire = tapf.checked; this.saveSettings(); });
     sens.value = this.settings.sens;
     qual.value = this.settings.quality;
     assist.checked = this.settings.assist;
@@ -456,6 +513,11 @@ class Game {
       this.actors.pushPlayer(this.player);
       this.world.collide(this.player.pos, this.player.radius, this.player.layer);
       this.player.eye.x = this.player.pos.x; this.player.eye.z = this.player.pos.z;
+      if (live && inp.taps.length) { const t = inp.taps[inp.taps.length - 1]; this.pendingTap = { x: t.x, y: t.y, t: this.clock }; for (const tt of inp.taps) this.hud.tapFx(tt.x, tt.y); }
+      if (this.pendingTap) {
+        if (!live || this.clock - this.pendingTap.t > 0.3) this.pendingTap = null;
+        else if (this.weapon.trigger(this.player, this, this.tapDirection(this.pendingTap.x, this.pendingTap.y))) this.pendingTap = null;
+      }
       this.weapon.update(dt, live ? inp : { ...inp, fire: false, reload: false }, this.player, this);
       if (live) this.time += dt;
       this.lastShotT += dt;

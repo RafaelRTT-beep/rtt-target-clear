@@ -29,6 +29,7 @@ export class Player {
     this.crouch = false; this.crouchAmt = 0;
     this.health = 100; this.alive = true; this.lastHurt = 99;
     this.recoilP = 0; this.recoverP = 0; this.shake = 0;
+    this.nudgeYaw = 0; this.nudgePitch = 0;
   }
 
   addRecoil(p, y) {
@@ -55,6 +56,14 @@ export class Player {
     this.pitch += lp * fovK;
     if (assist && assist.pull) {
       this.yaw += assist.pull.yaw; this.pitch += assist.pull.pitch;
+    }
+    // camera draait vloeiend een stukje mee naar waar je tikte
+    if (this.nudgeYaw || this.nudgePitch) {
+      const k = Math.min(1, dt * 16);
+      this.yaw += this.nudgeYaw * k; this.pitch += this.nudgePitch * k;
+      this.nudgeYaw *= 1 - k; this.nudgePitch *= 1 - k;
+      if (Math.abs(this.nudgeYaw) < 1e-4) this.nudgeYaw = 0;
+      if (Math.abs(this.nudgePitch) < 1e-4) this.nudgePitch = 0;
     }
     // terugslag herstel
     this.recoverDelay = (this.recoverDelay || 0) - dt;

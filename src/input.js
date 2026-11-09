@@ -18,6 +18,8 @@ export class Input {
     this.joy = null;
     this.looks = new Map();
     this.fires = new Set();
+    this.taps = [];
+    this.tapFire = opts.tapFire !== false;
     this.joyBase = document.getElementById('joy');
     this.joyKnob = document.getElementById('joyKnob');
     this.bind();
@@ -40,17 +42,19 @@ export class Input {
       if (b === 'crouch') { this.crouch = !this.crouch; this.looks.set(e.pointerId, { x: e.clientX, y: e.clientY, el }); return; }
       if (b === 'pause') { this._pause = true; return; }
       if (e.clientX < window.innerWidth * 0.42 && !this.joy) {
-        this.joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY };
+        this.joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), tap: true };
         this.joyBase.style.transform = `translate(${e.clientX - 60}px, ${e.clientY - 60}px)`;
         this.joyBase.classList.add('active');
         this.joyKnob.style.transform = 'translate(0px, 0px)';
         return;
       }
-      this.looks.set(e.pointerId, { x: e.clientX, y: e.clientY, el: null });
+      // vrije vinger: slepen = kijken, korte tik = schieten
+      this.looks.set(e.pointerId, { x: e.clientX, y: e.clientY, el: null, sx: e.clientX, sy: e.clientY, t: performance.now(), tap: true, live: false });
     }, { passive: false });
     L.addEventListener('pointermove', (e) => {
       if (!this.enabled) return;
       if (this.joy && e.pointerId === this.joy.id) {
+        if (Math.hypot(e.clientX - this.joy.sx, e.clientY - this.joy.sy) > 12) this.joy.tap = false;
         let dx = e.clientX - this.joy.ox, dy = e.clientY - this.joy.oy;
         const r = Math.hypot(dx, dy), max = 52;
         if (r > max) {
@@ -66,12 +70,24 @@ export class Input {
       }
       const l = this.looks.get(e.pointerId);
       if (l) {
+        if (l.live === false) {
+          // dode zone: een tik mag het beeld niet laten schudden
+          if (Math.hypot(e.clientX - l.sx, e.clientY - l.sy) < 9) return;
+          l.live = true; l.tap = false;
+          l.x = e.clientX; l.y = e.clientY;
+          return;
+        }
         this.lookDX += (e.clientX - l.x);
         this.lookDY += (e.clientY - l.y);
         l.x = e.clientX; l.y = e.clientY;
       }
     }, { passive: false });
     const end = (e) => {
+      const now = performance.now();
+      const isUp = e.type === 'pointerup';
+      if (this.joy && e.pointerId === this.joy.id && isUp && this.tapFire && this.joy.tap && now - this.joy.t < 260) this.taps.push({ x: e.clientX, y: e.clientY });
+      const lt = this.looks.get(e.pointerId);
+      if (lt && !lt.el && isUp && this.tapFire && lt.tap && now - lt.t < 260) this.taps.push({ x: e.clientX, y: e.clientY });
       if (this.joy && e.pointerId === this.joy.id) {
         this.joy = null; this.moveX = 0; this.moveY = 0;
         this.joyBase.classList.remove('active');
@@ -130,7 +146,7 @@ export class Input {
     this.enabled = on;
     if (!on) {
       this.moveX = this.moveY = 0; this.lookDX = this.lookDY = 0;
-      this.fireHeld = false; this.adsHold = false; this.fires.clear(); this.looks.clear();
+      this.fireHeld = false; this.adsHold = false; this.fires.clear(); this.looks.clear(); this.taps.length = 0;
       this.joy = null; this.joyBase.classList.remove('active');
       this.placeJoyDefault();
       document.querySelectorAll('[data-btn].on').forEach((b) => b.classList.remove('on'));
@@ -160,6 +176,7 @@ export class Input {
       crouch: this.crouch,
       reload: this._reload,
       pause: this._pause,
+      taps: this.taps.splice(0),
     };
     this.lookDX = 0; this.lookDY = 0;
     this._reload = false; this._pause = false;
