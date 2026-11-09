@@ -20,6 +20,17 @@ export class Input {
     this.fires = new Set();
     this.taps = [];
     this.tapFire = opts.tapFire !== false;
+    // kantelen om te peeken (bewegingssensor)
+    this.tiltMode = opts.tilt || 'on';
+    this.tilt = { on: false, raw: null, neutral: null, weak: true };
+    this._onMotion = (e) => {
+      const g = e.accelerationIncludingGravity;
+      if (!g || g.x == null || g.y == null) return;
+      // hoek van de zwaartekracht in het schermvlak: verandert als je de telefoon als een stuur kantelt
+      if (Math.hypot(g.x, g.y) < 3) { this.tilt.weak = true; return; }
+      this.tilt.weak = false;
+      this.tilt.raw = Math.atan2(g.y, g.x);
+    };
     this.joyBase = document.getElementById('joy');
     this.joyKnob = document.getElementById('joyKnob');
     this.bind();
@@ -132,6 +143,32 @@ export class Input {
     });
   }
 
+  // moet vanuit een tik/klik worden aangeroepen (iOS vraagt dan om toestemming)
+  enableTilt() {
+    if (this.tilt.on || this.tiltMode === 'off') return;
+    const DM = window.DeviceMotionEvent;
+    if (!DM) return;
+    const start = () => { if (this.tilt.on) return; window.addEventListener('devicemotion', this._onMotion); this.tilt.on = true; };
+    if (typeof DM.requestPermission === 'function') {
+      DM.requestPermission().then((r) => { if (r === 'granted') start(); }).catch(() => {});
+    } else start();
+  }
+
+  recenterTilt() { this.tilt.neutral = null; }
+
+  tiltLean(dt) {
+    const t = this.tilt;
+    if (!t.on || this.tiltMode === 'off' || t.raw === null || t.weak) return 0;
+    if (t.neutral === null) t.neutral = t.raw;
+    let d = t.raw - t.neutral;
+    while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+    // greep verloopt langzaam: neutraal volgt rustig mee zolang je bijna recht houdt
+    if (Math.abs(d) < 0.14) t.neutral += d * Math.min(1, dt * 0.2);
+    if (this.tiltMode === 'invert') d = -d;
+    const a = Math.abs(d);
+    return Math.sign(d) * Math.min(1, Math.max(0, (a - 0.09) / 0.24));
+  }
+
   placeJoyDefault() {
     const sl = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sl')) || 0;
     this.joyBase.style.transform = `translate(${40 + sl}px, ${window.innerHeight - 170}px)`;
@@ -156,8 +193,10 @@ export class Input {
 
   reset() { this.adsToggle = false; this.crouch = false; }
 
-  consume() {
+  consume(dt = 1 / 60) {
     let mx = this.moveX, my = this.moveY;
+    const k0 = this.keys;
+    const keyLean = (k0.KeyE ? 1 : 0) - (k0.KeyQ ? 1 : 0);
     if (!this.touch) {
       const k = this.keys;
       mx = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0);
@@ -177,6 +216,7 @@ export class Input {
       reload: this._reload,
       pause: this._pause,
       taps: this.taps.splice(0),
+      lean: keyLean || (this.touch ? this.tiltLean(dt) : 0),
     };
     this.lookDX = 0; this.lookDY = 0;
     this._reload = false; this._pause = false;

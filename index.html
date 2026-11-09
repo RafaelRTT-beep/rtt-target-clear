@@ -117,7 +117,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 /* instellingen */
 #settings { position: fixed; inset: 0; z-index: 40; display: none; background: rgba(0,0,0,.6); }
 #settings.show { display: block; }
-.set-in { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, 90vw); background: #121418; border: 1px solid var(--line); border-radius: 4px; padding: 20px 22px; }
+.set-in { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, 90vw); max-height: 94vh; overflow: auto; background: #121418; border: 1px solid var(--line); border-radius: 4px; padding: 20px 22px; }
 .set-title { font-family: var(--cond); font-weight: 800; font-size: 28px; letter-spacing: .08em; margin-bottom: 10px; }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .set-row input[type=range] { width: 180px; accent-color: var(--red); }
@@ -322,7 +322,10 @@ body.portrait #rotate { display: grid; }
     <div class="set-row"><span>Gevoeligheid <b id="sensVal">1.00</b></span><input id="setSens" type="range" min="0.3" max="2.5" step="0.05"></div>
     <div class="set-row"><span>Grafische kwaliteit</span>
       <select id="setQuality"><option value="auto">Automatisch</option><option value="high">Hoog</option><option value="medium">Normaal</option><option value="low">Laag</option></select></div>
-    <div class="set-row"><span>Tik om te schieten</span><input id="setTap" type="checkbox"></div>
+    <div class="set-row"><span>Tikken op het scherm</span>
+      <select id="setTap"><option value="cross">Schiet op de crosshair</option><option value="point">Schiet waar je tikt</option><option value="off">Uit</option></select></div>
+    <div class="set-row"><span>Telefoon kantelen = peeken</span>
+      <select id="setTilt"><option value="on">Aan</option><option value="invert">Omgekeerd</option><option value="off">Uit</option></select></div>
     <div class="set-row"><span>Richthulp (touch)</span><input id="setAssist" type="checkbox"></div>
     <div class="set-row"><span>Geluid</span><input id="setSound" type="checkbox"></div>
     <div class="row" style="margin-top:14px"><button class="btn primary" id="btnSettingsClose">Klaar</button></div>

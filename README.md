@@ -11,8 +11,14 @@ Speelt direct in de browser (Safari/Chrome) en kan als app op het beginscherm.
 3. **Entresol**: rook in de hal, schutters op de entresol, trap op en een gijzeling als finale.
 
 ## Besturing
-- **Telefoon:** tik op het scherm om te schieten. Het schot gaat naar de plek waar je tikt en de camera draait mee. Links slepen om te lopen, rechts slepen om te kijken. De vuurknop ingedrukt houden geeft automatisch vuur. Daarnaast knoppen voor vizier, herladen en hurken. Tik-om-te-schieten staat aan/uit bij Instellingen.
-- **Mac/pc:** WASD lopen, muis kijken, linkerknop vuren, rechterknop richten, R herladen, C hurken, Esc pauze.
+- **Telefoon:**
+  - Tik op het scherm om op de crosshair te schieten.
+  - Kantel je telefoon als een stuur naar links of rechts om te leunen en om een hoek te peeken.
+  - Links slepen om te lopen, rechts slepen om te richten.
+  - Vuurknop ingedrukt houden voor automatisch vuur.
+  - Knoppen voor vizier, herladen en hurken.
+  - Bij Instellingen kies je "schiet waar je tikt" en zet je kantelen om of uit.
+- **Mac/pc:** WASD lopen, muis kijken, linkerknop vuren, rechterknop richten, Q/E leunen, R herladen, C hurken, Esc pauze.
 
 ## Techniek
 Three.js (WebGL 2) met PBR-materialen, realtime schaduwen, ACES-tonemapping, MSAA, bloom en een eigen grading-pass.

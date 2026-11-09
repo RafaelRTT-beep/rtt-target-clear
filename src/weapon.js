@@ -216,8 +216,9 @@ export class Weapon {
   // spread (radialen) voor dit moment
   currentSpread(player) {
     const mv = Math.min(1, player.speed / 3.2);
-    const hip = 0.016 + mv * 0.022 + (player.crouch ? -0.004 : 0);
-    const ads = 0.0018 + mv * 0.006;
+    // zuiver: stilstaand gaat het schot vrijwel exact op de crosshair
+    const hip = 0.0035 + mv * 0.0075 - (player.crouch ? 0.001 : 0);
+    const ads = 0.0004 + mv * 0.0015;
     return THREE.MathUtils.lerp(hip, ads, this.ads) + this.bloom;
   }
 
@@ -227,7 +228,7 @@ export class Weapon {
     this.ads += ((wantAds ? 1 : 0) - this.ads) * Math.min(1, dt * 13);
     // vuren
     this.fireCD -= dt;
-    this.bloom = Math.max(0, this.bloom - dt * 0.05);
+    this.bloom = Math.max(0, this.bloom - dt * 0.09);
     if (input.fire && this.fireCD <= 0 && player.alive && game.canShoot) {
       if (this.reloading) { /* niets */ }
       else if (this.mag <= 0) { this.sound.dry(); this.fireCD = 0.3; this.startReload(); }
@@ -289,9 +290,11 @@ export class Weapon {
     }
   }
 
+  ready(player, game) { return !this.reloading && this.fireCD <= 0 && player.alive && game.canShoot; }
+
   // één schot op verzoek (tik); geeft false als het wapen nog niet klaar is
   trigger(player, game, aimDir) {
-    if (this.reloading || this.fireCD > 0 || !player.alive || !game.canShoot) return false;
+    if (!this.ready(player, game)) return false;
     if (this.mag <= 0) { this.sound.dry(); this.fireCD = 0.3; this.startReload(); return true; }
     this.fire(player, game, aimDir);
     return true;
@@ -302,7 +305,7 @@ export class Weapon {
     this.mag--;
     this.shots++;
     const spread = aimDir ? Math.min(this.currentSpread(player), 0.004) : this.currentSpread(player);
-    this.bloom = Math.min(0.035, this.bloom + 0.0045 * (1 - this.ads * 0.6));
+    this.bloom = Math.min(0.012, this.bloom + 0.0016 * (1 - this.ads * 0.7));
     // richting met spreiding
     const cam = this.engine.camera;
     const dir = aimDir ? aimDir.clone() : new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);

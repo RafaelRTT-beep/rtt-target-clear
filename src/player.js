@@ -1,6 +1,8 @@
 // Speler: lopen, kijken, hurken, trap/entresol, schade en herstel.
 import * as THREE from 'three';
 
+const _dir = new THREE.Vector3();
+
 export class Player {
   constructor() {
     this.pos = new THREE.Vector3();
@@ -19,6 +21,7 @@ export class Player {
     this.shake = 0;
     this.bobT = 0;
     this.radius = 0.27;
+    this.lean = 0; this.leanOff = 0; this.leanX = 0; this.leanZ = 0;
   }
 
   spawn(x, z, yaw) {
@@ -30,6 +33,7 @@ export class Player {
     this.health = 100; this.alive = true; this.lastHurt = 99;
     this.recoilP = 0; this.recoverP = 0; this.shake = 0;
     this.nudgeYaw = 0; this.nudgePitch = 0;
+    this.lean = 0; this.leanOff = 0; this.leanX = 0; this.leanZ = 0;
   }
 
   addRecoil(p, y) {
@@ -83,6 +87,7 @@ export class Player {
     let max = 3.7;
     if (weapon.ads > 0.5) max = 2.1;
     if (this.crouch) max = Math.min(max, 1.9);
+    max *= 1 - 0.35 * Math.abs(this.lean);
     const mx = this.alive ? inp.moveX : 0, my = this.alive ? inp.moveY : 0;
     const tx = (fwdX * my + rgtX * mx) * max, tz = (fwdZ * my + rgtZ * mx) * max;
     const k = 1 - Math.exp(-dt * (Math.hypot(tx, tz) > 0.01 ? 11 : 14));
@@ -116,6 +121,20 @@ export class Player {
     const bob = Math.min(1, this.speed / 3) * (1 - weapon.ads * 0.7);
     const eyeH = THREE.MathUtils.lerp(1.63, 1.1, this.crouchAmt) + Math.abs(Math.sin(this.bobT)) * 0.028 * bob - 0.014 * bob;
     this.eye.set(this.pos.x, this.pos.y + eyeH, this.pos.z);
+    // leunen / peeken (telefoon kantelen of Q/E): hoofd schuift opzij, maar nooit door een muur
+    const want = this.alive ? THREE.MathUtils.clamp(inp.lean || 0, -1, 1) : 0;
+    this.lean += (want - this.lean) * Math.min(1, dt * 9);
+    let off = this.lean * 0.38;
+    if (Math.abs(off) > 0.005) {
+      const sgn = Math.sign(off);
+      _dir.set(rgtX * sgn, 0, rgtZ * sgn);
+      const hit = world.raycast(this.eye, _dir, Math.abs(off) + 0.2);
+      if (hit) off = sgn * Math.max(0, Math.min(Math.abs(off), hit.t - 0.2));
+    }
+    this.leanOff += (off - this.leanOff) * Math.min(1, dt * 20);
+    this.leanX = rgtX * this.leanOff; this.leanZ = rgtZ * this.leanOff;
+    this.eye.x += this.leanX; this.eye.z += this.leanZ;
+    this.eye.y -= Math.abs(this.leanOff) * 0.08;
     this.shake = Math.max(0, this.shake - dt * 2.5);
   }
 
@@ -123,7 +142,7 @@ export class Player {
     cam.position.copy(this.eye);
     const s = this.shake * this.shake;
     const sx = (Math.sin(t * 61) + Math.sin(t * 37)) * 0.006 * s, sy = (Math.cos(t * 53) + Math.sin(t * 29)) * 0.006 * s;
-    cam.rotation.set(this.pitch + sy, this.yaw + sx, Math.sin(this.bobT * 0.5) * 0.004 * Math.min(1, this.speed / 3), 'YXZ');
+    cam.rotation.set(this.pitch + sy, this.yaw + sx, Math.sin(this.bobT * 0.5) * 0.004 * Math.min(1, this.speed / 3) - this.lean * 0.17, 'YXZ');
     if (!this.alive) { cam.rotation.z = 0.5; cam.position.y = this.pos.y + 0.35; }
   }
 }

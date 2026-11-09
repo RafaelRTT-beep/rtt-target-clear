@@ -27,7 +27,9 @@ const DIFF = {
 class Game {
   constructor() {
     this.state = 'loading';
-    this.settings = Object.assign({ sens: 1, quality: 'auto', assist: true, sound: true, tapFire: true }, store.get('settings', {}));
+    this.settings = Object.assign({ sens: 1, quality: 'auto', assist: true, sound: true, tapMode: 'cross', tilt: 'on' }, store.get('settings', {}));
+    if (this.settings.tapFire === false && !store.get('settings', {}).tapMode) this.settings.tapMode = 'off';
+    delete this.settings.tapFire;
     this.best = store.get('best', {});
     this.clock = 0;
     this.lastShotT = 99;
@@ -46,7 +48,7 @@ class Game {
     this.T = await buildTextures((p) => setP(0.05 + p * 0.7));
     this.sound = new Sound();
     this.sound.setEnabled(this.settings.sound);
-    this.input = new Input($('touch'), $('c'), { sens: this.settings.sens, tapFire: this.settings.tapFire });
+    this.input = new Input($('touch'), $('c'), { sens: this.settings.sens, tapFire: this.settings.tapMode !== 'off', tilt: this.settings.tilt });
     this.input.onUnlock = () => { if (this.state === 'play') this.pause(); };
     this.fx = new FX(this.engine, this.T);
     this.fx.onCasing = () => this.sound.casing();
@@ -130,6 +132,7 @@ class Game {
   fireShot(origin, dir, tracer = false) {
     this.lastShotT = 0;
     this.lastShotPos.copy(origin);
+    if (this.input.touch && this.settings.assist && !tracer) dir = this.magnet(origin, dir);
     const w = this.world.raycast(origin, dir, 150);
     const a = this.actors.raycast(origin, dir, w ? w.t : 150);
     if (tracer) {
@@ -201,6 +204,32 @@ class Game {
     this.player.nudgeYaw = dy * 0.35;
     this.player.nudgePitch = (wantPitch - this.player.pitch) * 0.35;
     return dir;
+  }
+
+  // kogelmagnetisme (touch): een net-mis naast een verdachte of schijf telt als raak,
+  // maar nooit als er een burger, no-shoot of muur tussen zit
+  magnet(origin, dir) {
+    const w = this.world.raycast(origin, dir, 150);
+    if (this.actors.raycast(origin, dir, w ? w.t : 150)) return dir;
+    let best = null, bestA = 0.022;
+    const p = new THREE.Vector3();
+    for (const a of this.actors.list) {
+      if (!a.alive) continue;
+      if (a.kind === 'target' && a.turner && a.turnAng > 0.6) continue;
+      const pts = [a.aimPoint(p).clone()];
+      if (a.kind === 'human') pts.push(a.headPos.clone());
+      for (const q of pts) {
+        const to = q.sub(origin); const dist = to.length(); to.divideScalar(dist);
+        const ang = Math.acos(THREE.MathUtils.clamp(to.dot(dir), -1, 1));
+        if (ang >= bestA) continue;
+        const ww = this.world.raycast(origin, to, dist);
+        if (ww && ww.t < dist - 0.3) continue;
+        const blocker = this.actors.raycast(origin, to, dist + 0.3);
+        if (!blocker || blocker.actor !== a) continue;
+        bestA = ang; best = to;
+      }
+    }
+    return best || dir;
   }
 
   panOf(p) {
@@ -309,8 +338,8 @@ class Game {
       ? `<div><b>${hostiles}</b><span>shoot</span></div><div><b>${this.actors.list.filter((a) => a.kind === 'target' && !a.hostile).length}</b><span>no-shoot</span></div><div><b>${this.rooms.length}</b><span>kamers</span></div>`
       : `<div><b>${hostiles}</b><span>verdachten</span></div><div><b>${civ}</b><span>burgers</span></div><div><b>${this.rooms.length}</b><span>ruimtes</span></div>`;
     $('briefControls').innerHTML = this.input.touch
-      ? (this.settings.tapFire ? 'Tik op het scherm: schieten waar je tikt · Links slepen: lopen · Rechts slepen: kijken · Vuurknop ingedrukt houden: automatisch vuren' : 'Links slepen: lopen · Rechts slepen: kijken · Vuurknop ook slepen om te richten · Vizier = richten')
-      : 'WASD lopen · Muis kijken · Linkerknop vuren · Rechterknop richten · R herladen · C hurken · Esc pauze';
+      ? ({ cross: 'Tik op het scherm: schieten op de crosshair · Telefoon kantelen: peeken · Links slepen: lopen · Rechts slepen: richten · Vuurknop ingedrukt: automatisch vuren', point: 'Tik op het scherm: schieten waar je tikt · Links slepen: lopen · Rechts slepen: kijken · Vuurknop ingedrukt: automatisch vuren' }[this.settings.tapMode] || 'Links slepen: lopen · Rechts slepen: kijken · Vuurknop ook slepen om te richten · Vizier = richten')
+      : 'WASD lopen · Muis kijken · Linkerknop vuren · Rechterknop richten · Q/E leunen · R herladen · C hurken · Esc pauze';
     const b = this.best[lv.code];
     $('briefBest').textContent = b ? `Beste: ${fmtTime(b.t)}  (${b.g})` : 'Nog geen tijd gezet';
     this.setState('brief');
@@ -318,6 +347,7 @@ class Game {
 
   beginRun() {
     this.sound.unlock();
+    if (this.input.touch && this.settings.tilt !== 'off') { this.input.enableTilt(); this.input.recenterTilt(); }
     this.setState('countdown');
     this.input.requestLock();
     const s = this.world.start;
@@ -332,6 +362,7 @@ class Game {
     this.setState('pause');
   }
   resume() {
+    this.input.recenterTilt();
     this.setState('play');
     this.input.requestLock();
   }
@@ -403,9 +434,11 @@ class Game {
     tap('btnSettings', () => this.openSettings());
     tap('btnPauseSettings', () => this.openSettings());
     tap('btnSettingsClose', () => this.closeSettings());
-    const sens = $('setSens'), qual = $('setQuality'), assist = $('setAssist'), snd = $('setSound'), tapf = $('setTap');
-    tapf.checked = this.settings.tapFire;
-    tapf.addEventListener('change', () => { this.settings.tapFire = tapf.checked; this.input.tapFire = tapf.checked; this.saveSettings(); });
+    const sens = $('setSens'), qual = $('setQuality'), assist = $('setAssist'), snd = $('setSound'), tapf = $('setTap'), tilt = $('setTilt');
+    tilt.value = this.settings.tilt;
+    tilt.addEventListener('change', () => { this.settings.tilt = tilt.value; this.input.tiltMode = tilt.value; if (tilt.value !== 'off') { this.input.enableTilt(); this.input.recenterTilt(); } this.saveSettings(); });
+    tapf.value = this.settings.tapMode;
+    tapf.addEventListener('change', () => { this.settings.tapMode = tapf.value; this.input.tapFire = tapf.value !== 'off'; this.saveSettings(); });
     sens.value = this.settings.sens;
     qual.value = this.settings.quality;
     assist.checked = this.settings.assist;
@@ -486,7 +519,7 @@ class Game {
       E.grade.uniforms.uHitAmt.value = 0;
       E.grade.uniforms.uFade.value = 0;
     } else if (st === 'countdown' || st === 'play') {
-      const inp = this.input.consume();
+      const inp = this.input.consume(dt);
       if (inp.pause && st === 'play') { this.pause(); }
       const live = st === 'play' && !this.finished;
       // aim-assist (alleen touch)
@@ -512,11 +545,20 @@ class Game {
       this.player.update(dt, pin, this.world, this.weapon, this.sound, assist);
       this.actors.pushPlayer(this.player);
       this.world.collide(this.player.pos, this.player.radius, this.player.layer);
-      this.player.eye.x = this.player.pos.x; this.player.eye.z = this.player.pos.z;
-      if (live && inp.taps.length) { const t = inp.taps[inp.taps.length - 1]; this.pendingTap = { x: t.x, y: t.y, t: this.clock }; for (const tt of inp.taps) this.hud.tapFx(tt.x, tt.y); }
+      this.player.eye.x = this.player.pos.x + this.player.leanX; this.player.eye.z = this.player.pos.z + this.player.leanZ;
+      if (live && inp.taps.length) {
+        const t = inp.taps[inp.taps.length - 1];
+        this.pendingTap = { x: t.x, y: t.y, t: this.clock };
+        if (this.settings.tapMode === 'point') for (const tt of inp.taps) this.hud.tapFx(tt.x, tt.y);
+      }
       if (this.pendingTap) {
         if (!live || this.clock - this.pendingTap.t > 0.3) this.pendingTap = null;
-        else if (this.weapon.trigger(this.player, this, this.tapDirection(this.pendingTap.x, this.pendingTap.y))) this.pendingTap = null;
+        else if (this.weapon.ready(this.player, this)) {
+          // standaard: tik = schot recht op de crosshair; optie: naar het tikpunt
+          const dir = this.settings.tapMode === 'point' ? this.tapDirection(this.pendingTap.x, this.pendingTap.y) : null;
+          this.weapon.trigger(this.player, this, dir);
+          this.pendingTap = null;
+        }
       }
       this.weapon.update(dt, live ? inp : { ...inp, fire: false, reload: false }, this.player, this);
       if (live) this.time += dt;
@@ -541,6 +583,7 @@ class Game {
           this.setState('play');
           if (this.level.mode === 'targets') this.sound.beep();
           else this.sound.ui(1200);
+          if (this.input.tilt.on && !this.tiltHinted) { this.tiltHinted = true; setTimeout(() => this.hud.toast('KANTEL JE TELEFOON OM TE PEEKEN'), 900); }
         }
       }
       if (this.finished) {
